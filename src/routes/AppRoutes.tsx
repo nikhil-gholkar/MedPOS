@@ -28,6 +28,10 @@ export default function AppRoutes() {
           path="/login"
           element={<LoginPage />}
         />
+         <Route
+          path="/"
+          element={<LoginPage />}
+        />
 
         <Route
           path="/medical"
