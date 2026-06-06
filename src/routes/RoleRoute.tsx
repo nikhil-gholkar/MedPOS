@@ -16,7 +16,7 @@ export default function RoleRoute({
   );
 
   if (!user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   if (user.role !== role) {
