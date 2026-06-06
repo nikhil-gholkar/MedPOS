@@ -7,6 +7,7 @@ import {
 import LoginPage from "../pages/auth/LoginPage";
 
 import MedicalDashboard from "../pages/medical/DashboardPage";
+import POSPage from "../pages/medical/POSPage";
 import SuperAdminDashboard from "../pages/superadmin/DashboardPage";
 
 import MedicalLayout from "../layouts/MedicalLayout";
@@ -15,6 +16,8 @@ import SuperAdminLayout from "../layouts/SuperAdminLayout";
 import ProtectedRoute from "./ProtectedRoute";
 import RoleRoute from "./RoleRoute";
 import MedicalsPage from "../pages/superadmin/MedicalsPage";
+import InventoryPage from "../pages/medical/InventoryPage";
+import ReportsPage from "../pages/medical/ReportsPage";
 
 export default function AppRoutes() {
   return (
@@ -22,7 +25,7 @@ export default function AppRoutes() {
       <Routes>
 
         <Route
-          path="/"
+          path="/login"
           element={<LoginPage />}
         />
 
@@ -39,6 +42,18 @@ export default function AppRoutes() {
           <Route
             index
             element={<MedicalDashboard />}
+          />
+          <Route
+            path="inventory"
+            element={<InventoryPage />}
+          />
+          <Route
+            path="pos"
+            element={<POSPage />}
+          />
+          <Route
+            path="reports"
+            element={<ReportsPage />}
           />
         </Route>
 
