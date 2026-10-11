@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   Button,
-  Chip,
   TextField,
   Skeleton,
   MenuItem,
@@ -29,7 +28,6 @@ import {
   LocalAtm,
   CreditCard,
   PhoneIphone,
-  Category,
 } from "@mui/icons-material";
 
 import {
@@ -47,7 +45,10 @@ import {
 } from "recharts";
 
 import PageHeader from "../../components/ui/PageHeader";
+import StatsCard from "../../components/ui/StatsCard";
+import StatsStrip from "../../components/ui/StatsStrip";
 import { useAppSelector } from "../../hooks/reduxHooks";
+import { CATEGORY_META } from "../../features/inventory/categoryMeta";
 import {
   getSalesSummary,
   getDailyRevenue,
@@ -70,6 +71,13 @@ import type {
 // ─── Date Presets ──────────────────────────────────────────────────────────
 
 type DatePreset = "today" | "thisWeek" | "thisMonth" | "lastMonth" | "custom";
+
+const PRESET_LABELS: Record<Exclude<DatePreset, "custom">, string> = {
+  today: "Today",
+  thisWeek: "This week",
+  thisMonth: "This month",
+  lastMonth: "Last month",
+};
 
 const getDateRange = (preset: DatePreset): { start: Date; end: Date } => {
   const start = new Date();
@@ -110,28 +118,35 @@ const getDateRange = (preset: DatePreset): { start: Date; end: Date } => {
 
 const formatDate = (d: Date) => d.toISOString().split("T")[0];
 
-// ─── Chart Colors ──────────────────────────────────────────────────────────
+// ─── Chart colors ──────────────────────────────────────────────────────────
 
-const PIE_COLORS = ["#2563EB", "#7C3AED", "#059669", "#D97706", "#DC2626", "#0891B2"];
+const FALLBACK_CHART_COLOR = "#6B7873";
 
 const PAYMENT_ICONS: Record<string, React.ReactNode> = {
-  cash: <LocalAtm sx={{ fontSize: 18 }} />,
-  card: <CreditCard sx={{ fontSize: 18 }} />,
-  upi: <PhoneIphone sx={{ fontSize: 18 }} />,
-  other: <Receipt sx={{ fontSize: 18 }} />,
+  cash: <LocalAtm sx={{ fontSize: 16 }} />,
+  card: <CreditCard sx={{ fontSize: 16 }} />,
+  upi: <PhoneIphone sx={{ fontSize: 16 }} />,
+  other: <Receipt sx={{ fontSize: 16 }} />,
 };
 
-// ─── Custom Recharts Tooltip ───────────────────────────────────────────────
+// ─── Chart tooltip ─────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ChartTooltip = ({ active, payload, label }: any) => {
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: Array<{ name?: string; value: number | string; color?: string }>;
+  label?: string | number;
+}
+
+const ChartTooltip = ({ active, payload, label }: ChartTooltipProps) => {
   if (active && payload && payload.length) {
     return (
-      <div className="rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-lg">
-        <p className="text-xs font-medium text-slate-500 mb-1">{label}</p>
-        {payload.map((entry: any, i: number) => (
-          <p key={i} className="text-sm font-bold" style={{ color: entry.color }}>
-            {entry.name}: ₹{entry.value.toLocaleString()}
+      <div className="rounded-ctl border border-line bg-white px-3 py-2 shadow-[0_4px_12px_rgba(16,32,28,0.08)]">
+        {label !== undefined && (
+          <p className="mb-1 text-[11px] font-medium text-ink-mute">{label}</p>
+        )}
+        {payload.map((entry, i) => (
+          <p key={i} className="tnum text-[13px] font-semibold" style={{ color: entry.color }}>
+            {entry.name}: ₹{Number(entry.value).toLocaleString("en-IN")}
           </p>
         ))}
       </div>
@@ -166,14 +181,14 @@ export default function ReportsPage() {
 
   // ─── Load Data ──────────────────────────────────────────────────────────
 
-  const loadData = async () => {
+  const loadData = async (preset: DatePreset, start = "", end = "") => {
     if (!medicalId) return;
-    setLoading(true);
 
     try {
-      const range = datePreset === "custom"
-        ? { start: new Date(customStart), end: new Date(customEnd) }
-        : getDateRange(datePreset);
+      const range =
+        preset === "custom"
+          ? { start: new Date(start), end: new Date(end) }
+          : getDateRange(preset);
 
       const [sum, daily, top, cat, pay] = await Promise.all([
         getSalesSummary(medicalId, range.start, range.end),
@@ -197,14 +212,20 @@ export default function ReportsPage() {
   };
 
   useEffect(() => {
-    loadData();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- state updates run after the fetch resolves
+    loadData(datePreset, customStart, customEnd);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [medicalId, datePreset]);
 
-  // ─── Handle custom date change ───────────────────────────────────────────
+  const selectPreset = (preset: DatePreset) => {
+    setLoading(true);
+    setDatePreset(preset);
+  };
 
   const handleCustomDateChange = () => {
     if (customStart && customEnd && new Date(customStart) <= new Date(customEnd)) {
-      loadData();
+      setLoading(true);
+      loadData("custom", customStart, customEnd);
     }
   };
 
@@ -234,12 +255,12 @@ export default function ReportsPage() {
   const handleExportExcel = async () => {
     if (!medicalId) return;
     try {
-      // Dynamic import to keep bundle smaller
       const XLSX = await import("xlsx");
 
-      const range = datePreset === "custom"
-        ? { start: new Date(customStart), end: new Date(customEnd) }
-        : getDateRange(datePreset);
+      const range =
+        datePreset === "custom"
+          ? { start: new Date(customStart), end: new Date(customEnd) }
+          : getDateRange(datePreset);
 
       const endOfDay = new Date(range.end);
       endOfDay.setHours(23, 59, 59, 999);
@@ -274,7 +295,6 @@ export default function ReportsPage() {
 
       const doc = new jsPDF();
 
-      // Title
       doc.setFontSize(20);
       doc.setTextColor(30, 41, 59);
       doc.text("Sales Report", 14, 22);
@@ -283,7 +303,6 @@ export default function ReportsPage() {
       doc.setTextColor(148, 163, 184);
       doc.text(`Generated: ${new Date().toLocaleString("en-IN")}`, 14, 30);
 
-      // Summary
       doc.setFontSize(12);
       doc.setTextColor(30, 41, 59);
       doc.text("Summary", 14, 42);
@@ -298,7 +317,6 @@ export default function ReportsPage() {
       ];
       doc.text(sumLines, 14, 50);
 
-      // Top Medicines Table
       if (sortedMedicines.length > 0) {
         const yPos = 50 + sumLines.length * 5 + 10;
         doc.setFontSize(12);
@@ -313,12 +331,14 @@ export default function ReportsPage() {
           `₹${m.totalProfit.toLocaleString()}`,
         ]);
 
+        // jsPDF-autotable attaches autoTable() to the instance via side-effect import
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (doc as any).autoTable({
           startY: yPos + 4,
           head: [["#", "Medicine", "Sold", "Revenue", "Profit"]],
           body: tableData,
           theme: "grid",
-          headStyles: { fillColor: [37, 99, 235], fontSize: 9 },
+          headStyles: { fillColor: [15, 118, 110], fontSize: 9 },
           bodyStyles: { fontSize: 8 },
           styles: { cellPadding: 2 },
         });
@@ -330,408 +350,393 @@ export default function ReportsPage() {
     }
   };
 
-  // ─── Render helpers ──────────────────────────────────────────────────────
-
-  const summaryCards = summary
-    ? [
-        {
-          title: "Total Sales",
-          value: `₹${summary.totalSales.toLocaleString()}`,
-          icon: <ShoppingCart sx={{ fontSize: 22 }} />,
-          color: "blue",
-          bg: "bg-blue-50",
-          iconBg: "bg-blue-100",
-          iconColor: "text-blue-600",
-        },
-        {
-          title: "Total Profit",
-          value: `₹${summary.totalProfit.toLocaleString()}`,
-          icon: <TrendingUp sx={{ fontSize: 22 }} />,
-          color: "green",
-          bg: "bg-emerald-50",
-          iconBg: "bg-emerald-100",
-          iconColor: "text-emerald-600",
-        },
-        {
-          title: "Items Sold",
-          value: summary.totalItemsSold.toLocaleString(),
-          icon: <Inventory2 sx={{ fontSize: 22 }} />,
-          color: "purple",
-          bg: "bg-purple-50",
-          iconBg: "bg-purple-100",
-          iconColor: "text-purple-600",
-        },
-        {
-          title: "Avg Order Value",
-          value: `₹${summary.avgOrderValue.toLocaleString()}`,
-          icon: <Receipt sx={{ fontSize: 22 }} />,
-          color: "amber",
-          bg: "bg-amber-50",
-          iconBg: "bg-amber-100",
-          iconColor: "text-amber-600",
-        },
-      ]
-    : [];
+  // ─── Derived ─────────────────────────────────────────────────────────────
 
   const totalCatRevenue = categorySales.reduce((s, c) => s + c.totalRevenue, 0);
+  const hasData = !loading && summary !== null && summary.totalOrders > 0;
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <PageHeader
-          title="Reports"
-          subtitle="Analyze your sales and business performance"
-        />
-        <div className="flex items-center gap-2">
-          <Tooltip title="Export to Excel">
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<TableChart />}
-              onClick={handleExportExcel}
-              sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 500 }}
-            >
-              Excel
-            </Button>
-          </Tooltip>
-          <Tooltip title="Export to PDF">
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<PictureAsPdf />}
-              onClick={handleExportPdf}
-              sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 500, color: "#DC2626", borderColor: "#FCA5A5" }}
-            >
-              PDF
-            </Button>
-          </Tooltip>
-        </div>
-      </div>
+    <div>
+      <PageHeader
+        title="Reports"
+        subtitle="Sales, profit and stock movement for any date range"
+        action={
+          <>
+            <Tooltip title="Export sales and top medicines to Excel">
+              <Button variant="outlined" startIcon={<TableChart />} onClick={handleExportExcel}>
+                Excel
+              </Button>
+            </Tooltip>
+            <Tooltip title="Export a printable PDF summary">
+              <Button
+                variant="outlined"
+                startIcon={<PictureAsPdf />}
+                onClick={handleExportPdf}
+                disabled={!summary}
+              >
+                PDF
+              </Button>
+            </Tooltip>
+          </>
+        }
+      />
 
-      {/* ── Date Filter ─────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-        <CalendarMonth sx={{ fontSize: 20, color: "#64748B" }} />
-        {(["today", "thisWeek", "thisMonth", "lastMonth"] as DatePreset[]).map((preset) => (
-          <Chip
-            key={preset}
-            label={
-              preset === "today" ? "Today" :
-              preset === "thisWeek" ? "This Week" :
-              preset === "thisMonth" ? "This Month" : "Last Month"
-            }
-            clickable
-            onClick={() => setDatePreset(preset)}
-            sx={{
-              borderRadius: "8px",
-              fontWeight: datePreset === preset ? 600 : 500,
-              backgroundColor: datePreset === preset ? "#2563EB" : "#F1F5F9",
-              color: datePreset === preset ? "white" : "#64748B",
-              border: "1px solid",
-              borderColor: datePreset === preset ? "#2563EB" : "#E2E8F0",
-              transition: "all 0.2s",
-              "&:hover": { backgroundColor: datePreset === preset ? "#1D4ED8" : "#E2E8F0" },
-            }}
-          />
-        ))}
-        <Chip
-          label="Custom"
-          clickable
-          onClick={() => setDatePreset("custom")}
-          sx={{
-            borderRadius: "8px",
-            fontWeight: datePreset === "custom" ? 600 : 500,
-            backgroundColor: datePreset === "custom" ? "#2563EB" : "#F1F5F9",
-            color: datePreset === "custom" ? "white" : "#64748B",
-            border: "1px solid",
-            borderColor: datePreset === "custom" ? "#2563EB" : "#E2E8F0",
-          }}
-        />
+      {/* Date range filter */}
+      <div className="rounded-card border border-line bg-white p-3 md:p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <CalendarMonth sx={{ fontSize: 18, color: "#8A968F" }} />
 
-        {datePreset === "custom" && (
-          <div className="flex items-center gap-2 ml-1">
-            <TextField
-              type="date"
-              size="small"
-              value={customStart}
-              onChange={(e) => setCustomStart(e.target.value)}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: "10px",
-                  fontSize: 13,
-                  width: 140,
-                },
-              }}
-            />
-            <span className="text-slate-400">to</span>
-            <TextField
-              type="date"
-              size="small"
-              value={customEnd}
-              onChange={(e) => setCustomEnd(e.target.value)}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: "10px",
-                  fontSize: 13,
-                  width: 140,
-                },
-              }}
-            />
-            <Button
-              size="small"
-              variant="contained"
-              onClick={handleCustomDateChange}
-              sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 500 }}
+          <div
+            className="flex flex-wrap items-center gap-1 rounded-ctl border border-line bg-canvas p-1"
+            role="group"
+            aria-label="Select date range"
+          >
+            {(Object.keys(PRESET_LABELS) as Array<Exclude<DatePreset, "custom">>).map((preset) => {
+              const active = datePreset === preset;
+              return (
+                <button
+                  key={preset}
+                  onClick={() => selectPreset(preset)}
+                  aria-pressed={active}
+                  className={`rounded-chip border px-2.5 py-1 text-xs font-medium transition-colors ${
+                    active
+                      ? "border-line bg-white text-ink shadow-[0_1px_2px_rgba(16,32,28,0.06)]"
+                      : "border-transparent text-ink-soft hover:text-ink"
+                  }`}
+                >
+                  {PRESET_LABELS[preset]}
+                </button>
+              );
+            })}
+            <button
+              onClick={() => selectPreset("custom")}
+              aria-pressed={datePreset === "custom"}
+              className={`rounded-chip border px-2.5 py-1 text-xs font-medium transition-colors ${
+                datePreset === "custom"
+                  ? "border-line bg-white text-ink shadow-[0_1px_2px_rgba(16,32,28,0.06)]"
+                  : "border-transparent text-ink-soft hover:text-ink"
+              }`}
             >
-              Apply
-            </Button>
+              Custom
+            </button>
           </div>
-        )}
+
+          {datePreset === "custom" && (
+            <div className="flex flex-wrap items-center gap-2">
+              <TextField
+                type="date"
+                size="small"
+                aria-label="Start date"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+                sx={{ width: 150 }}
+              />
+              <span className="text-xs text-ink-mute">to</span>
+              <TextField
+                type="date"
+                size="small"
+                aria-label="End date"
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                sx={{ width: 150 }}
+              />
+              <Button
+                size="small"
+                variant="contained"
+                onClick={handleCustomDateChange}
+                disabled={!customStart || !customEnd}
+              >
+                Apply
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* ── Loading Skeleton ────────────────────────────────────────────── */}
+      {/* Loading skeleton */}
       {loading && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-5 grid gap-px overflow-hidden rounded-card border border-line bg-line sm:grid-cols-2 xl:grid-cols-4">
           {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} variant="rounded" height={110} sx={{ borderRadius: "16px" }} />
+            <Skeleton key={i} variant="rectangular" height={110} sx={{ bgcolor: "#EDF1EF" }} />
           ))}
-          <Skeleton variant="rounded" height={350} sx={{ borderRadius: "16px", gridColumn: "span 4" }} />
         </div>
       )}
 
-      {/* ── Summary Cards ───────────────────────────────────────────────── */}
+      {/* Summary strip */}
       {!loading && summary && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {summaryCards.map((card) => (
-            <div
-              key={card.title}
-              className={`group rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md`}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-500">{card.title}</p>
-                  <p className="mt-1 text-2xl font-bold text-slate-900">{card.value}</p>
-                </div>
-                <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${card.iconBg} transition-transform group-hover:scale-110`}>
-                  <span className={card.iconColor}>{card.icon}</span>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="mt-5">
+          <StatsStrip>
+            <StatsCard
+              title="Sales"
+              value={`₹${summary.totalSales.toLocaleString("en-IN")}`}
+              icon={<ShoppingCart sx={{ fontSize: 18 }} />}
+              hint={`${summary.totalOrders} order${summary.totalOrders !== 1 ? "s" : ""} in range`}
+            />
+            <StatsCard
+              title="Profit"
+              value={`₹${summary.totalProfit.toLocaleString("en-IN")}`}
+              icon={<TrendingUp sx={{ fontSize: 18 }} />}
+              tone={summary.totalProfit >= 0 ? "ok" : "danger"}
+              hint={
+                summary.totalSales > 0
+                  ? `${Math.round((summary.totalProfit / summary.totalSales) * 100)}% margin`
+                  : "No margin recorded"
+              }
+            />
+            <StatsCard
+              title="Items sold"
+              value={summary.totalItemsSold.toLocaleString("en-IN")}
+              icon={<Inventory2 sx={{ fontSize: 18 }} />}
+              hint="Units dispensed in range"
+            />
+            <StatsCard
+              title="Avg order value"
+              value={`₹${summary.avgOrderValue.toLocaleString("en-IN")}`}
+              icon={<Receipt sx={{ fontSize: 18 }} />}
+              hint="Per completed sale"
+            />
+          </StatsStrip>
         </div>
       )}
 
-      {/* ── Charts Row ──────────────────────────────────────────────────── */}
+      {/* Charts */}
       {!loading && (
-        <div className="grid gap-6 xl:grid-cols-3">
-          {/* Revenue Chart */}
-          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm xl:col-span-2">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-semibold text-slate-900">Revenue & Profit</h3>
-                <p className="mt-1 text-sm text-slate-500">Daily sales and profit trends</p>
-              </div>
+        <div className="mt-5 grid gap-5 xl:grid-cols-3">
+          <section className="rounded-card border border-line bg-white xl:col-span-2">
+            <div className="border-b border-line px-4 py-3 md:px-5">
+              <h2 className="text-[15px] font-semibold text-ink">Revenue &amp; profit</h2>
+              <p className="mt-0.5 text-xs text-ink-soft">Daily totals in the selected range</p>
             </div>
-            <div className="h-[300px] w-full">
+            <div className="h-[300px] w-full px-2 py-4">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dailyRevenue} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                <BarChart data={dailyRevenue} margin={{ top: 5, right: 10, left: -8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#EDF1EF" vertical={false} />
                   <XAxis
                     dataKey="label"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 10, fill: "#94A3B8" }}
+                    tick={{ fontSize: 10, fill: "#8A968F" }}
                     interval="preserveStartEnd"
                   />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#94A3B8" }} />
-                  <RechartTooltip content={<ChartTooltip />} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#8A968F" }} />
+                  <RechartTooltip content={<ChartTooltip />} cursor={{ fill: "#F3F5F4" }} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="revenue" name="Revenue" fill="#2563EB" radius={[4, 4, 0, 0]} maxBarSize={24} />
-                  <Bar dataKey="profit" name="Profit" fill="#059669" radius={[4, 4, 0, 0]} maxBarSize={24} />
+                  <Bar dataKey="revenue" name="Revenue" fill="#0F766E" radius={[3, 3, 0, 0]} maxBarSize={22} />
+                  <Bar dataKey="profit" name="Profit" fill="#157F3D" radius={[3, 3, 0, 0]} maxBarSize={22} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </section>
 
-          {/* Category Breakdown */}
-          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-            <div className="mb-4 flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50">
-                <Category sx={{ fontSize: 18, color: "#7C3AED" }} />
+          <section className="rounded-card border border-line bg-white">
+            <div className="border-b border-line px-4 py-3 md:px-5">
+              <h2 className="text-[15px] font-semibold text-ink">Sales by category</h2>
+              <p className="mt-0.5 text-xs text-ink-soft">Share of revenue</p>
+            </div>
+
+            {categorySales.length === 0 ? (
+              <div className="px-4 py-12 text-center md:px-5">
+                <p className="text-[13px] text-ink-soft">No category data in this range.</p>
               </div>
-              <div>
-                <h3 className="text-base font-semibold text-slate-900">Categories</h3>
-                <p className="text-xs text-slate-500">Sales by category</p>
+            ) : (
+              <div className="px-2 pt-4">
+                <div className="h-[220px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={categorySales.map((c) => ({ name: c.category, value: c.totalRevenue }))}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={52}
+                        outerRadius={82}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {categorySales.map((c, i) => (
+                          <Cell
+                            key={i}
+                            fill={CATEGORY_META[c.category as keyof typeof CATEGORY_META]?.color ?? FALLBACK_CHART_COLOR}
+                          />
+                        ))}
+                      </Pie>
+                      <RechartTooltip content={<ChartTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="space-y-1.5 px-4 pb-4 pt-2">
+                  {categorySales.map((cat) => {
+                    const pct =
+                      totalCatRevenue > 0
+                        ? ((cat.totalRevenue / totalCatRevenue) * 100).toFixed(1)
+                        : "0";
+                    return (
+                      <div key={cat.category} className="flex items-center justify-between text-[13px]">
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{
+                              backgroundColor:
+                                CATEGORY_META[cat.category as keyof typeof CATEGORY_META]?.color ??
+                                FALLBACK_CHART_COLOR,
+                            }}
+                          />
+                          <span className="text-ink-soft">{cat.category}</span>
+                        </span>
+                        <span className="tnum font-medium text-ink">{pct}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-            <div className="h-[260px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={categorySales.map((c) => ({ name: c.category, value: c.totalRevenue }))}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={90}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {categorySales.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <RechartTooltip content={<ChartTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mt-2 space-y-1.5">
-              {categorySales.map((cat, i) => {
-                const pct = totalCatRevenue > 0 ? ((cat.totalRevenue / totalCatRevenue) * 100).toFixed(1) : "0";
-                return (
-                  <div key={cat.category} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
-                      />
-                      <span className="text-slate-600">{cat.category}</span>
-                    </div>
-                    <span className="font-medium text-slate-900">{pct}%</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+            )}
+          </section>
         </div>
       )}
 
-      {/* ── Payment Methods + Tables Row ─────────────────────────────────── */}
+      {/* Payment methods + top medicines */}
       {!loading && (
-        <div className="grid gap-6 xl:grid-cols-4">
-          {/* Payment Methods */}
-          <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-            <h3 className="mb-4 text-sm font-semibold text-slate-900">Payment Methods</h3>
-            <div className="space-y-3">
+        <div className="mt-5 grid gap-5 xl:grid-cols-4">
+          <section className="rounded-card border border-line bg-white">
+            <div className="border-b border-line px-4 py-3 md:px-5">
+              <h2 className="text-[15px] font-semibold text-ink">Payment methods</h2>
+              <p className="mt-0.5 text-xs text-ink-soft">Share of revenue</p>
+            </div>
+
+            <div className="divide-y divide-line px-4 md:px-5">
               {paymentBreakdown.length === 0 && (
-                <p className="text-sm text-slate-400 py-4 text-center">No data</p>
+                <p className="py-8 text-center text-[13px] text-ink-mute">No data in range</p>
               )}
               {paymentBreakdown.map((p) => {
                 const pct = summary?.totalSales
                   ? ((p.totalRevenue / summary.totalSales) * 100).toFixed(1)
                   : "0";
                 return (
-                  <div key={p.method} className="rounded-xl border border-slate-100 bg-slate-50/50 p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-slate-600">
-                          {PAYMENT_ICONS[p.method] ?? <Receipt sx={{ fontSize: 18 }} />}
-                        </span>
-                        <span className="text-sm font-medium text-slate-700 capitalize">{p.method}</span>
-                      </div>
-                      <span className="text-xs text-slate-400">{p.count} orders</span>
-                    </div>
+                  <div key={p.method} className="py-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-base font-bold text-slate-900">₹{p.totalRevenue.toLocaleString()}</span>
-                      <span className="text-xs font-medium text-slate-500">{pct}%</span>
+                      <span className="flex items-center gap-2 text-[13px] font-medium capitalize text-ink">
+                        <span className="text-ink-soft">
+                          {PAYMENT_ICONS[p.method] ?? <Receipt sx={{ fontSize: 16 }} />}
+                        </span>
+                        {p.method}
+                      </span>
+                      <span className="tnum text-[13px] font-semibold text-ink">
+                        ₹{p.totalRevenue.toLocaleString("en-IN")}
+                      </span>
                     </div>
-                    <div className="mt-2 h-1.5 w-full rounded-full bg-slate-200">
-                      <div
-                        className="h-1.5 rounded-full bg-blue-500 transition-all"
-                        style={{ width: `${pct}%` }}
-                      />
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <div className="h-1 flex-1 overflow-hidden rounded-full bg-canvas">
+                        <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="tnum shrink-0 text-[11px] text-ink-mute">
+                        {pct}% · {p.count} order{p.count !== 1 ? "s" : ""}
+                      </span>
                     </div>
                   </div>
                 );
               })}
             </div>
-          </div>
+          </section>
 
-          {/* Top Medicines Table */}
-          <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm xl:col-span-3">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-slate-900">Top Selling Medicines</h3>
-              <div className="flex items-center gap-2">
+          <section className="rounded-card border border-line bg-white xl:col-span-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3 md:px-5">
+              <div>
+                <h2 className="text-[15px] font-semibold text-ink">Top selling medicines</h2>
+                <p className="mt-0.5 text-xs text-ink-soft">Ranked by revenue in range</p>
+              </div>
+              <div className="flex items-center gap-1.5">
                 <FormControl size="small" sx={{ minWidth: 120 }}>
                   <Select
                     value={sortField}
                     onChange={(e) => setSortField(e.target.value as keyof TopMedicine)}
-                    sx={{
-                      borderRadius: "8px",
-                      fontSize: 12,
-                      "& .MuiOutlinedInput-notchedOutline": { borderColor: "#E2E8F0" },
-                    }}
+                    aria-label="Sort by"
                   >
                     <MenuItem value="totalRevenue">Revenue</MenuItem>
                     <MenuItem value="totalProfit">Profit</MenuItem>
                     <MenuItem value="quantitySold">Quantity</MenuItem>
                   </Select>
                 </FormControl>
-                <IconButton
-                  size="small"
-                  onClick={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))}
-                  sx={{
-                    transform: sortDir === "asc" ? "rotate(180deg)" : "rotate(0deg)",
-                    transition: "transform 0.2s",
-                  }}
-                >
-                  <ArrowUpward fontSize="small" />
-                </IconButton>
+                <Tooltip title={sortDir === "desc" ? "Descending" : "Ascending"}>
+                  <IconButton
+                    size="small"
+                    onClick={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))}
+                    aria-label="Toggle sort direction"
+                    sx={{
+                      transform: sortDir === "asc" ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s",
+                      color: "#4E5D57",
+                    }}
+                  >
+                    <ArrowUpward fontSize="small" />
+                  </IconButton>
+                </Tooltip>
               </div>
             </div>
 
             {sortedMedicines.length === 0 ? (
-              <p className="py-8 text-center text-sm text-slate-400">No sales data available</p>
+              <p className="py-12 text-center text-[13px] text-ink-mute">
+                No sales recorded in this range.
+              </p>
             ) : (
               <TableContainer>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 600, fontSize: 11, color: "#64748B" }}>#</TableCell>
-                      <TableCell sx={{ fontWeight: 600, fontSize: 11, color: "#64748B" }}>Medicine</TableCell>
-                      <TableCell sx={{ fontWeight: 600, fontSize: 11, color: "#64748B" }} align="right"
-                        onClick={() => toggleSort("quantitySold")}
-                        className="cursor-pointer hover:text-blue-600 transition-colors"
-                      >Qty Sold</TableCell>
-                      <TableCell sx={{ fontWeight: 600, fontSize: 11, color: "#64748B" }} align="right"
-                        onClick={() => toggleSort("totalRevenue")}
-                        className="cursor-pointer hover:text-blue-600 transition-colors"
-                      >Revenue</TableCell>
-                      <TableCell sx={{ fontWeight: 600, fontSize: 11, color: "#64748B" }} align="right"
-                        onClick={() => toggleSort("totalProfit")}
-                        className="cursor-pointer hover:text-blue-600 transition-colors"
-                      >Profit</TableCell>
-                      <TableCell sx={{ fontWeight: 600, fontSize: 11, color: "#64748B" }} align="right">Margin</TableCell>
+                      <TableCell>#</TableCell>
+                      <TableCell>Medicine</TableCell>
+                      <TableCell align="right" onClick={() => toggleSort("quantitySold")} className="cursor-pointer hover:text-primary">
+                        Qty sold
+                      </TableCell>
+                      <TableCell align="right" onClick={() => toggleSort("totalRevenue")} className="cursor-pointer hover:text-primary">
+                        Revenue
+                      </TableCell>
+                      <TableCell align="right" onClick={() => toggleSort("totalProfit")} className="cursor-pointer hover:text-primary">
+                        Profit
+                      </TableCell>
+                      <TableCell align="right">Margin</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {sortedMedicines.map((med, i) => {
-                      const margin = med.totalRevenue > 0
-                        ? ((med.totalProfit / med.totalRevenue) * 100).toFixed(1)
-                        : "0";
+                      const margin =
+                        med.totalRevenue > 0
+                          ? ((med.totalProfit / med.totalRevenue) * 100).toFixed(1)
+                          : "0";
+                      const marginClass =
+                        Number(margin) >= 30
+                          ? "border-ok/25 bg-ok-soft text-ok"
+                          : Number(margin) >= 15
+                          ? "border-warn/25 bg-warn-soft text-warn"
+                          : "border-danger/25 bg-danger-soft text-danger";
                       return (
-                        <TableRow key={med.medicineName} hover sx={{ "&:hover": { backgroundColor: "#F8FAFC" } }}>
-                          <TableCell sx={{ fontSize: 12, color: "#94A3B8" }}>{i + 1}</TableCell>
+                        <TableRow key={med.medicineName} hover>
+                          <TableCell className="tnum" sx={{ color: "#8A968F" }}>
+                            {i + 1}
+                          </TableCell>
                           <TableCell>
-                            <p className="text-sm font-medium text-slate-900">{med.medicineName}</p>
-                            <p className="text-xs text-slate-400">{med.genericName}</p>
+                            <p className="text-[13px] font-medium text-ink">{med.medicineName}</p>
+                            <p className="text-xs text-ink-mute">{med.genericName}</p>
                           </TableCell>
-                          <TableCell align="right" sx={{ fontSize: 13, fontWeight: 500 }}>{med.quantitySold}</TableCell>
-                          <TableCell align="right" sx={{ fontSize: 13, fontWeight: 500 }}>
-                            ₹{med.totalRevenue.toLocaleString()}
+                          <TableCell align="right" className="tnum font-medium">
+                            {med.quantitySold}
                           </TableCell>
-                          <TableCell align="right" sx={{ fontSize: 13, fontWeight: 500, color: med.totalProfit >= 0 ? "#059669" : "#DC2626" }}>
-                            ₹{med.totalProfit.toLocaleString()}
+                          <TableCell align="right" className="tnum font-medium">
+                            ₹{med.totalRevenue.toLocaleString("en-IN")}
+                          </TableCell>
+                          <TableCell
+                            align="right"
+                            className={`tnum font-medium ${
+                              med.totalProfit >= 0 ? "text-ok" : "text-danger"
+                            }`}
+                          >
+                            ₹{med.totalProfit.toLocaleString("en-IN")}
                           </TableCell>
                           <TableCell align="right">
-                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                              Number(margin) >= 30
-                                ? "bg-emerald-100 text-emerald-700"
-                                : Number(margin) >= 15
-                                ? "bg-amber-100 text-amber-700"
-                                : "bg-red-100 text-red-700"
-                            }`}>
+                            <span
+                              className={`inline-flex items-center rounded-chip border px-1.5 py-0.5 text-[11px] font-medium ${marginClass}`}
+                            >
                               {margin}%
                             </span>
                           </TableCell>
@@ -742,19 +747,19 @@ export default function ReportsPage() {
                 </Table>
               </TableContainer>
             )}
-          </div>
+          </section>
         </div>
       )}
 
-      {/* ── Empty State ─────────────────────────────────────────────────── */}
-      {!loading && !summary && (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-100 bg-white py-20 shadow-sm">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-50">
-            <TrendingUp sx={{ fontSize: 32, color: "#CBD5E1" }} />
-          </div>
-          <h3 className="mt-4 text-lg font-semibold text-slate-900">No Data Available</h3>
-          <p className="mt-2 max-w-sm text-center text-sm text-slate-500">
-            Select a different date range or start making sales to see your reports here.
+      {/* Empty state */}
+      {!loading && !hasData && summary !== null && (
+        <div className="mt-5 flex flex-col items-center justify-center rounded-card border border-line bg-white px-6 py-16 text-center">
+          <span className="flex h-10 w-10 items-center justify-center rounded-ctl bg-canvas">
+            <TrendingUp sx={{ fontSize: 20, color: "#8A968F" }} />
+          </span>
+          <h3 className="mt-3 text-[15px] font-semibold text-ink">No sales in this range</h3>
+          <p className="mt-1 max-w-sm text-[13px] text-ink-soft">
+            Pick a different date range, or complete a sale at the counter to see it here.
           </p>
         </div>
       )}

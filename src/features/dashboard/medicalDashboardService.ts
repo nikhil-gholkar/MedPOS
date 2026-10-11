@@ -16,6 +16,30 @@ export interface WeeklyRevenuePoint {
   revenue: number;
 }
 
+interface InventoryRecord {
+  quantity?: number;
+  expiryDate?: string;
+}
+
+interface SaleItemRecord {
+  sellingPrice?: number;
+  purchasePrice?: number;
+  quantity?: number;
+}
+
+interface SaleRecord {
+  createdAt?: string;
+  total?: number;
+  items?: SaleItemRecord[];
+}
+
+const isRecent = (value: string | undefined, since: Date): boolean => {
+  if (!value) return false;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  return date >= since;
+};
+
 export const getMedicalDashboardStats = async (
   medicalId: string
 ): Promise<MedicalDashboardStats> => {
@@ -27,20 +51,20 @@ export const getMedicalDashboardStats = async (
   const inventorySnapshot = await getDocs(inventoryQuery);
   const inventory = inventorySnapshot.docs.map((doc) => ({
     id: doc.id,
-    ...doc.data(),
+    ...(doc.data() as InventoryRecord),
   }));
 
   const lowStockItems = inventory.filter(
-    (item: any) => item.quantity <= 10
+    (item) => (item.quantity ?? 0) <= 10
   ).length;
 
-  const nearExpiryItems = inventory.filter(
-    (item: any) => {
-      const expiry = new Date(item.expiryDate);
-      const diffDays = (expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
-      return diffDays <= 30;
-    }
-  ).length;
+  const nearExpiryItems = inventory.filter((item) => {
+    if (!item.expiryDate) return false;
+    const expiry = new Date(item.expiryDate);
+    if (Number.isNaN(expiry.getTime())) return false;
+    const diffDays = (expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    return diffDays <= 30;
+  }).length;
 
   // Sales: query by medicalId only (no orderBy to avoid composite index requirement)
   // Date filtering is done in JavaScript
@@ -53,16 +77,13 @@ export const getMedicalDashboardStats = async (
   );
 
   const salesSnapshot = await getDocs(salesQuery);
-  const allSales: any[] = salesSnapshot.docs.map((doc) => ({
+  const allSales: SaleRecord[] = salesSnapshot.docs.map((doc) => ({
     id: doc.id,
-    ...doc.data(),
+    ...(doc.data() as SaleRecord),
   }));
 
   // Filter today's sales in JavaScript
-  const todaySales = allSales.filter((sale) => {
-    const createdAt = new Date(sale.createdAt);
-    return createdAt >= todayStart;
-  });
+  const todaySales = allSales.filter((sale) => isRecent(sale.createdAt, todayStart));
 
   const todaySalesTotal = todaySales.reduce(
     (sum, sale) => sum + (sale.total ?? 0),
@@ -70,9 +91,11 @@ export const getMedicalDashboardStats = async (
   );
 
   const todayProfit = todaySales.reduce((sum, sale) => {
-    const items: any[] = sale.items ?? [];
+    const items = sale.items ?? [];
     const itemProfit = items.reduce(
-      (p, item) => p + (item.sellingPrice - (item.purchasePrice ?? 0)) * item.quantity,
+      (p, item) =>
+        p +
+        ((item.sellingPrice ?? 0) - (item.purchasePrice ?? 0)) * (item.quantity ?? 0),
       0
     );
     return sum + itemProfit;
@@ -100,13 +123,13 @@ export const getWeeklyRevenue = async (
   );
 
   const snapshot = await getDocs(q);
-  const allSales: any[] = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const allSales: SaleRecord[] = snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...(doc.data() as SaleRecord),
+  }));
 
   // Filter last 7 days in JavaScript
-  const recentSales = allSales.filter((sale) => {
-    const createdAt = new Date(sale.createdAt);
-    return createdAt >= weekAgo;
-  });
+  const recentSales = allSales.filter((sale) => isRecent(sale.createdAt, weekAgo));
 
   const dayMap: Record<string, number> = {};
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -118,6 +141,7 @@ export const getWeeklyRevenue = async (
   }
 
   for (const sale of recentSales) {
+    if (!sale.createdAt) continue;
     const key = new Date(sale.createdAt).toDateString();
     if (dayMap[key] !== undefined) {
       dayMap[key] += sale.total ?? 0;

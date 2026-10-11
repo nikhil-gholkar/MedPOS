@@ -185,7 +185,7 @@ export const getCategorySales = async (
   for (const sale of sales) {
     const items = sale.items ?? [];
     for (const item of items) {
-      const category = (item as any).category ?? "Other";
+      const category = (item as { category?: string }).category ?? "Other";
       if (!catMap[category]) {
         catMap[category] = { category, totalRevenue: 0, totalProfit: 0, itemsSold: 0 };
       }

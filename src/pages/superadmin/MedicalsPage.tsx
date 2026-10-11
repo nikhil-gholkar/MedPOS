@@ -1,21 +1,14 @@
 import { useEffect, useState } from "react";
 
-import {
-  Button,
-  Chip,
-  Paper,
-} from "@mui/material";
+import { Button } from "@mui/material";
 
-import {
-  DataGrid,
-} from "@mui/x-data-grid";
-import type {
-  GridColDef,
-} from "@mui/x-data-grid";
+import { DataGrid } from "@mui/x-data-grid";
+import type { GridColDef } from "@mui/x-data-grid";
 
 import EditIcon from "@mui/icons-material/Edit";
 import BlockIcon from "@mui/icons-material/Block";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import AddIcon from "@mui/icons-material/Add";
 
 import {
   useAppDispatch,
@@ -30,71 +23,57 @@ import {
 } from "../../features/medicals/medicalThunks";
 
 import MedicalFormDialog from "../../features/medicals/MedicalFormDialog";
-
 import EditMedicalDialog from "../../features/medicals/EditMedicalDialog";
 
-import type {
-  Medical,
-} from "../../features/medicals/medicalTypes";
+import PageHeader from "../../components/ui/PageHeader";
+
+import type { Medical, CreateMedicalPayload } from "../../features/medicals/medicalTypes";
+
+const TAG = "inline-flex items-center rounded-chip border px-1.5 py-0.5 text-[11px] font-medium";
 
 export default function MedicalsPage() {
-  const dispatch =
-    useAppDispatch();
+  const dispatch = useAppDispatch();
 
-  const {
-    medicals,
-    loading,
-  } = useAppSelector(
-    (state) => state.medicals
-  );
+  const { medicals, loading } = useAppSelector((state) => state.medicals);
 
-  const [createOpen, setCreateOpen] =
-    useState(false);
-
-  const [editOpen, setEditOpen] =
-    useState(false);
-
-  const [selectedMedical,
-    setSelectedMedical] =
-    useState<Medical | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [selectedMedical, setSelectedMedical] = useState<Medical | null>(null);
 
   useEffect(() => {
     dispatch(fetchMedicals());
   }, [dispatch]);
 
-  const handleCreateMedical =
-    async (data: any) => {
-      await dispatch(
-        addMedical(data)
-      );
+  const handleCreateMedical = async (data: CreateMedicalPayload) => {
+    await dispatch(addMedical(data));
+    setCreateOpen(false);
+  };
 
-      setCreateOpen(false);
-    };
-
-  const handleEditMedical =
-    async (data: Medical) => {
-      await dispatch(
-        editMedical({
-          id: data.id,
-          medicalName:
-            data.medicalName,
-          ownerName:
-            data.ownerName,
-          phone: data.phone,
-          email: data.email,
-          address: data.address,
-        })
-      );
-
-      setEditOpen(false);
-    };
+  const handleEditMedical = async (data: Medical) => {
+    await dispatch(
+      editMedical({
+        id: data.id,
+        medicalName: data.medicalName,
+        ownerName: data.ownerName,
+        phone: data.phone,
+        email: data.email,
+        address: data.address,
+      })
+    );
+    setEditOpen(false);
+  };
 
   const columns: GridColDef[] = [
     {
       field: "medicalName",
-      headerName:
-        "Medical Name",
-      flex: 1,
+      headerName: "Store",
+      flex: 1.4,
+      renderCell: (params) => (
+        <div className="py-1">
+          <p className="text-[13px] font-semibold text-ink">{params.row.medicalName}</p>
+          <p className="text-xs text-ink-mute">{params.row.email || "—"}</p>
+        </div>
+      ),
     },
     {
       field: "ownerName",
@@ -105,45 +84,38 @@ export default function MedicalsPage() {
       field: "phone",
       headerName: "Phone",
       flex: 1,
+      renderCell: (params) => (
+        <span className="tnum text-ink-soft">{params.row.phone || "—"}</span>
+      ),
     },
     {
       field: "status",
       headerName: "Status",
-      flex: 1,
-
+      flex: 0.8,
       renderCell: (params) => (
-        <Chip
-          label={
+        <span
+          className={`${TAG} ${
             params.row.isActive
-              ? "Active"
-              : "Inactive"
-          }
-          color={
-            params.row.isActive
-              ? "success"
-              : "error"
-          }
-        />
+              ? "border-ok/25 bg-ok-soft text-ok"
+              : "border-line-strong bg-[#F3F5F4] text-ink-soft"
+          }`}
+        >
+          {params.row.isActive ? "Active" : "Inactive"}
+        </span>
       ),
     },
     {
       field: "actions",
       headerName: "Actions",
-      flex: 1.5,
-
+      flex: 1.6,
       sortable: false,
-
       renderCell: (params) => (
-        <div className="flex gap-2">
-
+        <div className="flex items-center gap-1">
           <Button
             size="small"
-            startIcon={<EditIcon />}
+            startIcon={<EditIcon sx={{ fontSize: 15 }} />}
             onClick={() => {
-              setSelectedMedical(
-                params.row
-              );
-
+              setSelectedMedical(params.row);
               setEditOpen(true);
             }}
           >
@@ -152,33 +124,25 @@ export default function MedicalsPage() {
 
           <Button
             size="small"
-            color={
-              params.row.isActive
-                ? "error"
-                : "success"
-            }
+            color={params.row.isActive ? "error" : "success"}
             startIcon={
-              params.row.isActive
-                ? <BlockIcon />
-                : <CheckCircleIcon />
+              params.row.isActive ? (
+                <BlockIcon sx={{ fontSize: 15 }} />
+              ) : (
+                <CheckCircleIcon sx={{ fontSize: 15 }} />
+              )
             }
             onClick={() =>
               dispatch(
                 toggleMedical({
-                  medicalId:
-                    params.row.id,
-                  currentStatus:
-                    params.row
-                      .isActive,
+                  medicalId: params.row.id,
+                  currentStatus: params.row.isActive,
                 })
               )
             }
           >
-            {params.row.isActive
-              ? "Deactivate"
-              : "Activate"}
+            {params.row.isActive ? "Deactivate" : "Activate"}
           </Button>
-
         </div>
       ),
     },
@@ -186,59 +150,74 @@ export default function MedicalsPage() {
 
   return (
     <div>
+      <PageHeader
+        title="Medical stores"
+        subtitle="Pharmacies registered on the platform"
+        action={
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
+            Add store
+          </Button>
+        }
+      />
 
-      <div className="mb-5 flex items-center justify-between">
-
-        <h1 className="text-2xl font-bold">
-          Medical Management
-        </h1>
-
-        <Button
-          variant="contained"
-          onClick={() =>
-            setCreateOpen(true)
-          }
-        >
-          Add Medical
-        </Button>
-
-      </div>
-
-      <Paper
-        sx={{
-          height: 600,
-          width: "100%",
-        }}
-      >
+      <div className="overflow-hidden rounded-card border border-line bg-white">
         <DataGrid
           rows={medicals}
           columns={columns}
           loading={loading}
           disableRowSelectionOnClick
+          autoHeight
+          pageSizeOptions={[10, 25, 50]}
+          initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
+          sx={{
+            border: "none",
+            fontSize: 13,
+            "& .MuiDataGrid-columnHeaders": {
+              backgroundColor: "#F8FAF9",
+              borderBottom: "1px solid #E5E9E7",
+            },
+            "& .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within": {
+              outline: "none",
+            },
+            "& .MuiDataGrid-columnHeaderTitle": {
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+              color: "#6B7873",
+            },
+            "& .MuiDataGrid-row": {
+              borderBottom: "1px solid #EEF1EF",
+              "&:hover": { backgroundColor: "#F7F9F8" },
+            },
+            "& .MuiDataGrid-cell": {
+              borderColor: "transparent",
+              display: "flex",
+              alignItems: "center",
+              "&:focus, &:focus-within": { outline: "none" },
+            },
+            "& .MuiDataGrid-footerContainer": {
+              borderTop: "1px solid #E5E9E7",
+              minHeight: 44,
+            },
+            "& .MuiTablePagination-root": { fontSize: 12 },
+          }}
         />
-      </Paper>
+      </div>
 
       <MedicalFormDialog
         open={createOpen}
-        onClose={() =>
-          setCreateOpen(false)
-        }
-        onSubmit={
-          handleCreateMedical
-        }
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreateMedical}
       />
 
       <EditMedicalDialog
+        key={selectedMedical?.id ?? "none"}
         open={editOpen}
-        onClose={() =>
-          setEditOpen(false)
-        }
+        onClose={() => setEditOpen(false)}
         medical={selectedMedical}
-        onSubmit={
-          handleEditMedical
-        }
+        onSubmit={handleEditMedical}
       />
-
     </div>
   );
 }

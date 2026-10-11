@@ -5,49 +5,34 @@ import AppHeader from "../components/layout/AppHeader";
 import AppSidebar from "../components/layout/AppSidebar";
 import AppDrawer from "../components/layout/AppDrawer";
 
-
 import { superAdminNavigation } from "../config/navigation";
 
 export default function SuperAdminLayout() {
-
-
-  const [drawerOpen, setDrawerOpen] =
-    useState(false);
-
-
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <div className="flex">
-
-      <div className="hidden md:block">
-        <AppSidebar
-          items={superAdminNavigation}
-        />
+    <div className="flex min-h-screen">
+      <div className="sticky top-0 hidden h-screen md:block">
+        <AppSidebar items={superAdminNavigation} label="Platform" />
       </div>
 
       <AppDrawer
         open={drawerOpen}
-        onClose={() =>
-          setDrawerOpen(false)
-        }
+        onClose={() => setDrawerOpen(false)}
         items={superAdminNavigation}
+        label="Platform"
       />
 
-      <div className="flex-1">
-
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <AppHeader
-  title="Medical Dashboard"
-  onMenuClick={() =>
-    setDrawerOpen(true)
-  }
-/>
+          title="Platform console"
+          onMenuClick={() => setDrawerOpen(true)}
+        />
 
-        <div className="p-5">
+        <main className="flex-1 px-4 py-5 md:px-6 md:py-6">
           <Outlet />
-        </div>
-
+        </main>
       </div>
-
     </div>
   );
 }

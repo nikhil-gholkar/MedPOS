@@ -16,22 +16,13 @@ import type {
   CreateMedicinePayload,
   MedicineCategory,
 } from "./inventoryTypes";
+import { MEDICINE_CATEGORIES } from "./categoryMeta";
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSubmit: (
-    data: CreateMedicinePayload
-  ) => void | Promise<void>;
+  onSubmit: (data: CreateMedicinePayload) => void | Promise<void>;
 }
-
-const categories: MedicineCategory[] = [
-  "Tablet",
-  "Capsule",
-  "Syrup",
-  "Injection",
-  "Other",
-];
 
 const initialForm: CreateMedicinePayload = {
   medicineName: "",
@@ -46,24 +37,8 @@ const initialForm: CreateMedicinePayload = {
   supplierId: "",
 };
 
-const fieldSx = {
-  "& .MuiOutlinedInput-root": {
-    borderRadius: "12px",
-    backgroundColor: "#F8FAFC",
-    "& fieldset": { borderColor: "#E2E8F0" },
-    "&:hover fieldset": { borderColor: "#CBD5E1" },
-    "&.Mui-focused fieldset": { borderColor: "#2563EB" },
-  },
-  "& .MuiInputLabel-root.Mui-focused": { color: "#2563EB" },
-};
-
-export default function MedicineFormDialog({
-  open,
-  onClose,
-  onSubmit,
-}: Props) {
-  const [formData, setFormData] =
-    useState<CreateMedicinePayload>(initialForm);
+export default function MedicineFormDialog({ open, onClose, onSubmit }: Props) {
+  const [formData, setFormData] = useState<CreateMedicinePayload>(initialForm);
 
   const handleChange = (
     field: keyof CreateMedicinePayload,
@@ -78,62 +53,45 @@ export default function MedicineFormDialog({
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      fullWidth
-      maxWidth="md"
-      slotProps={{
-        paper: { sx: { borderRadius: "20px", overflow: "hidden" } },
-      }}
-    >
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle
         sx={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
-          pb: 1,
+          gap: 2,
+          pb: 1.5,
           pt: 2.5,
           px: 3,
-          borderBottom: "1px solid #F1F5F9",
+          borderBottom: "1px solid #E5E9E7",
         }}
       >
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">
-            Add New Medicine
-          </h2>
-          <p className="mt-0.5 text-sm text-slate-500">
-            Fill in the details below to add a medicine
+          <h2 className="text-[16px] font-semibold text-ink">Add medicine</h2>
+          <p className="mt-0.5 text-[13px] text-ink-soft">
+            Stock, pricing and batch details for a new catalogue item
           </p>
         </div>
-        <IconButton
-          onClick={onClose}
-          size="small"
-          sx={{
-            color: "#94A3B8",
-            "&:hover": { backgroundColor: "#F1F5F9" },
-          }}
-        >
+        <IconButton onClick={onClose} size="small" aria-label="Close" sx={{ color: "#8A968F" }}>
           <Close fontSize="small" />
         </IconButton>
       </DialogTitle>
 
       <DialogContent sx={{ px: 3, py: 3 }}>
-        <div className="mt-2 grid gap-4 md:grid-cols-2">
+        <div className="mt-1 grid gap-4 md:grid-cols-2">
           <TextField
-            label="Medicine Name"
+            label="Medicine name"
             value={formData.medicineName}
             onChange={(e) => handleChange("medicineName", e.target.value)}
             fullWidth
-            sx={fieldSx}
+            required
           />
 
           <TextField
-            label="Generic Name"
+            label="Generic name"
             value={formData.genericName}
             onChange={(e) => handleChange("genericName", e.target.value)}
             fullWidth
-            sx={fieldSx}
           />
 
           <TextField
@@ -141,7 +99,6 @@ export default function MedicineFormDialog({
             value={formData.manufacturer}
             onChange={(e) => handleChange("manufacturer", e.target.value)}
             fullWidth
-            sx={fieldSx}
           />
 
           <TextField
@@ -150,9 +107,8 @@ export default function MedicineFormDialog({
             value={formData.category}
             onChange={(e) => handleChange("category", e.target.value)}
             fullWidth
-            sx={fieldSx}
           >
-            {categories.map((category) => (
+            {MEDICINE_CATEGORIES.map((category: MedicineCategory) => (
               <MenuItem key={category} value={category}>
                 {category}
               </MenuItem>
@@ -160,11 +116,10 @@ export default function MedicineFormDialog({
           </TextField>
 
           <TextField
-            label="Batch Number"
+            label="Batch number"
             value={formData.batchNumber}
             onChange={(e) => handleChange("batchNumber", e.target.value)}
             fullWidth
-            sx={fieldSx}
           />
 
           <TextField
@@ -173,76 +128,45 @@ export default function MedicineFormDialog({
             value={formData.quantity}
             onChange={(e) => handleChange("quantity", Number(e.target.value))}
             fullWidth
-            sx={fieldSx}
+            slotProps={{ htmlInput: { min: 0 } }}
           />
 
           <TextField
             type="number"
-            label="Purchase Price"
+            label="Purchase price (₹)"
             value={formData.purchasePrice}
             onChange={(e) => handleChange("purchasePrice", Number(e.target.value))}
             fullWidth
-            sx={fieldSx}
+            slotProps={{ htmlInput: { min: 0 } }}
           />
 
           <TextField
             type="number"
-            label="Selling Price"
+            label="Selling price (₹)"
             value={formData.sellingPrice}
             onChange={(e) => handleChange("sellingPrice", Number(e.target.value))}
             fullWidth
-            sx={fieldSx}
+            slotProps={{ htmlInput: { min: 0 } }}
           />
 
           <TextField
             type="date"
-            label="Expiry Date"
+            label="Expiry date"
             slotProps={{
               inputLabel: { shrink: true },
             }}
             value={formData.expiryDate}
             onChange={(e) => handleChange("expiryDate", e.target.value)}
             fullWidth
-            sx={{ ...fieldSx, gridColumn: "span 2" }}
+            sx={{ md: { gridColumn: "span 2" } }}
           />
         </div>
       </DialogContent>
 
-      <DialogActions
-        sx={{
-          px: 3,
-          py: 2.5,
-          borderTop: "1px solid #F1F5F9",
-        }}
-      >
-        <Button
-          onClick={onClose}
-          sx={{
-            borderRadius: "10px",
-            textTransform: "none",
-            color: "#64748B",
-            fontWeight: 500,
-          }}
-        >
-          Cancel
-        </Button>
-
-        <Button
-          variant="contained"
-          onClick={handleSubmit}
-          sx={{
-            borderRadius: "10px",
-            textTransform: "none",
-            fontWeight: 600,
-            px: 3,
-            boxShadow: "0 4px 14px rgba(37, 99, 235, 0.3)",
-            background: "linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)",
-            "&:hover": {
-              boxShadow: "0 6px 20px rgba(37, 99, 235, 0.4)",
-            },
-          }}
-        >
-          Add Medicine
+      <DialogActions sx={{ px: 3, py: 2.5, borderTop: "1px solid #E5E9E7" }}>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={handleSubmit}>
+          Add medicine
         </Button>
       </DialogActions>
     </Dialog>

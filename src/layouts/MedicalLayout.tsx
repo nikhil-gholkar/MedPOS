@@ -9,39 +9,33 @@ import MobileBottomNav from "../components/layout/MobileBottomNav";
 import { medicalNavigation } from "../config/navigation";
 
 export default function MedicalLayout() {
-  const [drawerOpen, setDrawerOpen] =
-    useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <div className="flex">
-
-      <div className="hidden md:block">
-        <AppSidebar
-          items={medicalNavigation}
-        />
+    <div className="flex min-h-screen">
+      <div className="sticky top-0 hidden h-screen md:block">
+        <AppSidebar items={medicalNavigation} label="Pharmacy" />
       </div>
 
       <AppDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         items={medicalNavigation}
+        label="Pharmacy"
       />
 
-      <div className="flex flex-1 flex-col min-h-screen">
-
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <AppHeader
-          title="Medical Dashboard"
+          title="Pharmacy console"
           onMenuClick={() => setDrawerOpen(true)}
         />
 
-        <div className="flex-1 p-5 pb-20 md:pb-5">
+        <main className="flex-1 px-4 pb-24 pt-4 md:px-6 md:pb-6 md:pt-5">
           <Outlet />
-        </div>
+        </main>
 
         <MobileBottomNav />
-
       </div>
-
     </div>
   );
 }

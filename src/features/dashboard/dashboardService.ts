@@ -1,48 +1,78 @@
-import {
-  collection,
-  getDocs,
-} from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 
 import { db } from "../../firebase/firebaseConfig";
 
-import type { DashboardStats } from "./dashboardTypes";
+import type { DashboardStats, RecentStore } from "./dashboardTypes";
 
-export const getDashboardStats =
-  async (): Promise<DashboardStats> => {
-    const snapshot = await getDocs(
-      collection(db, "medicals")
-    );
+interface MedicalRecord {
+  medicalName?: string;
+  ownerName?: string;
+  isActive?: boolean;
+  createdAt?: string;
+}
 
-    const medicals =
-      snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+const parseDate = (value: string | undefined): Date | null => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
 
-    const today =
-      new Date().toDateString();
+export const getDashboardStats = async (): Promise<DashboardStats> => {
+  const snapshot = await getDocs(collection(db, "medicals"));
 
-    return {
-      totalMedicals:
-        medicals.length,
+  const medicals = snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...(doc.data() as MedicalRecord),
+  }));
 
-      activeMedicals:
-        medicals.filter(
-          (m: any) => m.isActive
-        ).length,
+  const today = new Date().toDateString();
 
-      inactiveMedicals:
-        medicals.filter(
-          (m: any) => !m.isActive
-        ).length,
+  // Registrations per month over the last six months
+  const now = new Date();
+  const monthlyGrowth = [];
+  for (let i = 5; i >= 0; i--) {
+    const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const label = monthStart.toLocaleDateString("en-GB", { month: "short" });
+    const count = medicals.filter((m) => {
+      const created = parseDate(m.createdAt);
+      return (
+        created !== null &&
+        created.getFullYear() === monthStart.getFullYear() &&
+        created.getMonth() === monthStart.getMonth()
+      );
+    }).length;
+    monthlyGrowth.push({ month: label, count });
+  }
 
-      todayAdded:
-        medicals.filter(
-          (m: any) =>
-            new Date(
-              m.createdAt
-            ).toDateString() ===
-            today
-        ).length,
-    };
+  // Most recent registrations
+  const recentStores: RecentStore[] = medicals
+    .filter((m) => parseDate(m.createdAt) !== null)
+    .sort(
+      (a, b) =>
+        (parseDate(b.createdAt)?.getTime() ?? 0) - (parseDate(a.createdAt)?.getTime() ?? 0)
+    )
+    .slice(0, 5)
+    .map((m) => ({
+      id: m.id,
+      medicalName: m.medicalName ?? "Unnamed store",
+      ownerName: m.ownerName ?? "—",
+      createdAt: m.createdAt ?? "",
+    }));
+
+  return {
+    totalMedicals: medicals.length,
+
+    activeMedicals: medicals.filter((m) => m.isActive).length,
+
+    inactiveMedicals: medicals.filter((m) => !m.isActive).length,
+
+    todayAdded: medicals.filter((m) => {
+      const created = parseDate(m.createdAt);
+      return created !== null && created.toDateString() === today;
+    }).length,
+
+    monthlyGrowth,
+
+    recentStores,
   };
+};
