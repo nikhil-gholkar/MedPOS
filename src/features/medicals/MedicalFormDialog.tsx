@@ -23,7 +23,6 @@ export interface FormData {
   phone: string;
   email: string;
   address: string;
-  username: string;
   password: string;
 }
 
@@ -33,7 +32,6 @@ const emptyForm: FormData = {
   phone: "",
   email: "",
   address: "",
-  username: "",
   password: "",
 };
 
@@ -100,11 +98,14 @@ export default function MedicalFormDialog({ open, onClose, onSubmit }: Props) {
           />
 
           <TextField
-            label="Email"
+            label="Login email"
             type="email"
             value={formData.email}
             onChange={(e) => handleChange("email", e.target.value)}
             fullWidth
+            required
+            autoComplete="off"
+            helperText="The store signs in with this address"
           />
 
           <TextField
@@ -113,15 +114,6 @@ export default function MedicalFormDialog({ open, onClose, onSubmit }: Props) {
             onChange={(e) => handleChange("address", e.target.value)}
             fullWidth
             sx={{ md: { gridColumn: "span 2" } }}
-          />
-
-          <TextField
-            label="Login username"
-            value={formData.username}
-            onChange={(e) => handleChange("username", e.target.value)}
-            fullWidth
-            required
-            autoComplete="off"
           />
 
           <TextField
@@ -144,7 +136,7 @@ export default function MedicalFormDialog({ open, onClose, onSubmit }: Props) {
           disabled={
             !formData.medicalName ||
             !formData.ownerName ||
-            !formData.username ||
+            !formData.email ||
             !formData.password
           }
         >

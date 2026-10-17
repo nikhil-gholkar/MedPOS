@@ -15,6 +15,7 @@ import type {
 import {
   updateMedical,
   toggleMedicalStatus,
+  deleteMedical,
 } from "./medicalService";
 
 export const fetchMedicals =
@@ -72,6 +73,21 @@ export const toggleMedical =
         medicalId,
         currentStatus
       );
+
+      thunkAPI.dispatch(
+        fetchMedicals()
+      );
+    }
+  );
+
+export const removeMedical =
+  createAsyncThunk(
+    "medicals/removeMedical",
+    async (
+      medicalId: string,
+      thunkAPI
+    ) => {
+      await deleteMedical(medicalId);
 
       thunkAPI.dispatch(
         fetchMedicals()

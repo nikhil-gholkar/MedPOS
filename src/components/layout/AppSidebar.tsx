@@ -6,7 +6,7 @@ import UserProfileCard from "../ui/UserProfileCard";
 import AppLogo from "../ui/AppLogo";
 
 import { useAppSelector } from "../../hooks/reduxHooks";
-import { clearUser } from "../../utils/authStorage";
+import { logoutUser } from "../../features/auth/logoutUser";
 
 import type { NavigationItem } from "../../types/navigation.types";
 
@@ -22,8 +22,8 @@ export default function AppSidebar({ items, label = "Menu" }: Props) {
 
   const user = useAppSelector((state) => state.auth.user);
 
-  const handleLogout = () => {
-    clearUser();
+  const handleLogout = async () => {
+    await logoutUser();
     navigate("/login");
   };
 

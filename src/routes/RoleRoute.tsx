@@ -11,9 +11,14 @@ export default function RoleRoute({
   children,
   role,
 }: Props) {
-  const user = useAppSelector(
-    (state) => state.auth.user
+  const { user, initialized } = useAppSelector(
+    (state) => state.auth
   );
+
+  // Wait for Firebase Auth's first auth-state event (see authInitializer).
+  if (!initialized) {
+    return null;
+  }
 
   if (!user) {
     return <Navigate to="/login" replace />;

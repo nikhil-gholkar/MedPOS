@@ -18,6 +18,7 @@ import RoleRoute from "./RoleRoute";
 import MedicalsPage from "../pages/superadmin/MedicalsPage";
 import InventoryPage from "../pages/medical/InventoryPage";
 import ReportsPage from "../pages/medical/ReportsPage";
+import SuppliersPage from "../pages/medical/SuppliersPage";
 
 export default function AppRoutes() {
   return (
@@ -58,6 +59,10 @@ export default function AppRoutes() {
           <Route
             path="reports"
             element={<ReportsPage />}
+          />
+          <Route
+            path="suppliers"
+            element={<SuppliersPage />}
           />
         </Route>
 

@@ -1,0 +1,209 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =============================================================================
+    // Preconditions (must hold in the app for these rules to work):
+    //  1. Firebase Authentication is used: request.auth != null on every request.
+    //  2. The `users/{userId}` document ID EQUALS the Firebase Auth UID.
+    //     Role and tenancy are read from that document:
+    //       users/{uid} = { role: "superadmin" | "medical",
+    //                       medicalId: "<medicals doc id>",   // medical role only
+    //                       isActive: true, createdAt: "..." }
+    //  3. NEVER store credentials in Firestore: writing a `password` field is
+    //     explicitly rejected below.
+    // =============================================================================
+    // Default deny: any path without a matching `allow` is rejected.
+
+    // --- Identity helpers ---------------------------------------------------------
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Always guarded by isSignedIn() at the call site so get() never runs
+    // for an unauthenticated request.
+    function me() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function myRole() {
+      return me().get('role', '');
+    }
+
+    function myMedicalId() {
+      return me().get('medicalId', null);
+    }
+
+    function isActiveAccount() {
+      return isSignedIn() && me().get('isActive', false) == true;
+    }
+
+    function isSuperadmin() {
+      return isSignedIn() && myRole() == 'superadmin';
+    }
+
+    // An active "medical" user whose own tenancy id is known.
+    // Everything tenant-scoped hangs off this predicate.
+    function isScopedMedical() {
+      return isSignedIn()
+        && myRole() == 'medical'
+        && isActiveAccount()
+        && myMedicalId() != null;
+    }
+
+    // --- Claim helpers ------------------------------------------------------------
+
+    // Kept separate so it can be reused by create/update checks.
+    function hasNoPasswordField() {
+      return !request.resource.data.keys().hasAny(['password']);
+    }
+
+    // =============================================================================
+    // medicals  — every medical store (tenant root; doc id == medicalId)
+    // =============================================================================
+    match /medicals/{medicalId} {
+      // Superadmin manages the platform: list/create/update/toggle.
+      allow read: if isSuperadmin();
+
+      // A medical account may read its own store record (its own data only).
+      allow read: if isScopedMedical() && myMedicalId() == medicalId;
+
+      // Shape guard on writes: no credentials ever live here. These are separate
+      // statements from any blanket grant so the guard can never be OR'd away.
+      allow create: if isSuperadmin()
+        && hasNoPasswordField()
+        && request.resource.data.keys().hasAll(['medicalName', 'ownerName', 'email', 'isActive', 'createdAt']);
+
+      allow update: if isSuperadmin()
+        && hasNoPasswordField()
+        && request.resource.data.keys().hasAll(['medicalName', 'ownerName', 'email', 'isActive', 'createdAt']);
+
+      allow delete: if isSuperadmin();
+    }
+
+    // =============================================================================
+    // users — role assignments, keyed by Firebase Auth UID after migration
+    // =============================================================================
+    match /users/{userId} {
+      // Users may always read their own document.
+      // ORDER MATTERS: the self-read check must come first so that short-circuit
+      // evaluation avoids recursing when isSuperadmin() triggers get() on this
+      // same document path.
+      allow get: if isSignedIn() && (
+        request.auth.uid == userId
+        || isSuperadmin()
+      );
+
+      // Role lookups across accounts (e.g. superadmin toggleMedicalStatus query)
+      // are admin-only; users never list other users.
+      allow list: if isSuperadmin();
+
+      // Only the superadmin provisions accounts, and plaintext secrets are
+      // rejected outright so a regression cannot reintroduce them.
+      allow create: if isSuperadmin()
+        && hasNoPasswordField()
+        && request.resource.data.keys().hasAll(['role', 'isActive', 'createdAt'])
+        && request.resource.data.role in ['superadmin', 'medical']
+        && request.resource.data.isActive == true
+        && (
+          // medical accounts must be bound to a tenant...
+          (request.resource.data.role == 'medical'
+            && request.resource.data.keys().hasAny(['medicalId']))
+          // ...and superadmins must not be assigned someone else's tenant
+          || (request.resource.data.role == 'superadmin'
+            && !request.resource.data.keys().hasAny(['medicalId']))
+        );
+
+      // Role and tenant binding are immutable after creation; no credentials.
+      // isActive / username / profile fields remain updateable (toggleMedicalStatus).
+      allow update: if isSuperadmin()
+        && hasNoPasswordField()
+        && request.resource.data.get('role', null) == resource.data.get('role', null)
+        && request.resource.data.get('medicalId', null) == resource.data.get('medicalId', null);
+
+      allow delete: if isSuperadmin();
+    }
+
+    // =============================================================================
+    // inventory — medicines belonging to one medical
+    // =============================================================================
+    match /inventory/{medicineId} {
+      // Superadmin: read-only oversight (separate statement keeps the admin
+      // grant provable for unfiltered list queries).
+      allow read: if isSuperadmin();
+
+      // Tenant owner sees only its own stock.
+      allow read: if isScopedMedical()
+        && resource.data.get('medicalId', null) == myMedicalId();
+
+      // Writes are tenant-scoped; the medicalId can neither be forged on create
+      // nor moved to another tenant on update.
+      allow create: if isScopedMedical()
+        && hasNoPasswordField()
+        && request.resource.data.get('medicalId', null) == myMedicalId();
+
+      allow update: if isScopedMedical()
+        && resource.data.get('medicalId', null) == myMedicalId()
+        && request.resource.data.get('medicalId', null) == myMedicalId();
+
+      // Stock edits (deductStock transaction) update an existing same-tenant doc —
+      // covered above. Deletion is tenant-scoped too.
+      allow delete: if isScopedMedical()
+        && resource.data.get('medicalId', null) == myMedicalId();
+
+      // Superadmin tenant wipe: deleting a store removes its stock as well.
+      // Destructive by design, platform-admin only; never grants update.
+      allow delete: if isSuperadmin();
+    }
+
+    // =============================================================================
+    // sales — POS transactions; append-only history
+    // =============================================================================
+    match /sales/{saleId} {
+      allow read: if isSuperadmin();
+
+      allow read: if isScopedMedical()
+        && resource.data.get('medicalId', null) == myMedicalId();
+
+      // Only the owning tenant may record a sale, and only as itself.
+      allow create: if isScopedMedical()
+        && hasNoPasswordField()
+        && request.resource.data.get('medicalId', null) == myMedicalId()
+        && request.resource.data.keys().hasAll(['items', 'total', 'paymentMethod', 'createdAt']);
+
+      // No update/delete for tenants: past transactions and reported revenue
+      // are immutable.
+
+      // Superadmin tenant wipe only — a store's whole history is removed with
+      // it. Editing an individual sale stays impossible for everyone.
+      allow delete: if isSuperadmin();
+    }
+    // =============================================================================
+    // suppliers — one medical's vendor directory (drives the Call action)
+    // =============================================================================
+    match /suppliers/{supplierId} {
+      // Superadmin: read-only oversight, same as inventory/sales.
+      allow read: if isSuperadmin();
+
+      // Tenant owner sees only their own suppliers.
+      allow read: if isScopedMedical()
+        && resource.data.get('medicalId', null) == myMedicalId();
+
+      // medicalId can neither be forged on create nor moved on update;
+      // the form's required fields are enforced here too.
+      allow create: if isScopedMedical()
+        && hasNoPasswordField()
+        && request.resource.data.get('medicalId', null) == myMedicalId()
+        && request.resource.data.keys().hasAll(['supplierName', 'phone', 'createdAt']);
+
+      allow update: if isScopedMedical()
+        && resource.data.get('medicalId', null) == myMedicalId()
+        && request.resource.data.get('medicalId', null) == myMedicalId();
+
+      allow delete: if isScopedMedical()
+        && resource.data.get('medicalId', null) == myMedicalId();
+    }
+  }
+}

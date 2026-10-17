@@ -13,9 +13,10 @@ export interface CreateMedicalPayload {
   medicalName: string;
   ownerName: string;
   phone: string;
+  /** Login identity — also the Firebase Auth account email. Required. */
   email: string;
   address: string;
-  username: string;
+  /** Used to create the Firebase Auth account; never persisted to Firestore. */
   password: string;
 }
 

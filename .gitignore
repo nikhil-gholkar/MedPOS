@@ -24,3 +24,9 @@ dist-ssr
 *.sw?
 *.env
 *freebuff-chat-*
+
+# Credentials — never commit these
+serviceAccount.json
+serviceAccount*.json
+service-account*.json
+*.pem

@@ -9,10 +9,16 @@ interface Props {
 export default function ProtectedRoute({
   children,
 }: Props) {
-  const isAuthenticated =
+  const { isAuthenticated, initialized } =
     useAppSelector(
-      (state) => state.auth.isAuthenticated
+      (state) => state.auth
     );
+
+  // Firebase Auth resolves asynchronously on page load — don't bounce to
+  // the login screen before we know whether a session exists.
+  if (!initialized) {
+    return null;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/" replace />;

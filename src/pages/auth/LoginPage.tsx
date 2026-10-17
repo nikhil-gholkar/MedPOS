@@ -19,19 +19,18 @@ import { loginUser } from "../../features/auth/authService";
 import { useAppDispatch } from "../../hooks/reduxHooks";
 
 import { loginSuccess } from "../../features/auth/authSlice";
-import { saveUser } from "../../utils/authStorage";
 
 export default function LoginPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const canSubmit = username.trim().length > 0 && password.length > 0 && !loading;
+  const canSubmit = email.trim().length > 0 && password.length > 0 && !loading;
 
   const handleLogin = async (event: FormEvent) => {
     event.preventDefault();
@@ -41,16 +40,19 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const user = await loginUser(username.trim(), password);
+      const user = await loginUser(email.trim(), password);
 
       dispatch(loginSuccess(user));
-      saveUser(user);
 
       navigate(user.role === "superadmin" ? "/superadmin" : "/medical", {
         replace: true,
       });
-    } catch {
-      setError("Invalid username or password.");
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Invalid email or password."
+      );
     } finally {
       setLoading(false);
     }
@@ -104,9 +106,10 @@ export default function LoginPage() {
 
           <form className="mt-6 flex flex-col gap-4" onSubmit={handleLogin}>
             <TextField
-              label="Username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               fullWidth
               autoFocus
               autoComplete="username"

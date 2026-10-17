@@ -8,6 +8,7 @@ import type { GridColDef } from "@mui/x-data-grid";
 import EditIcon from "@mui/icons-material/Edit";
 import BlockIcon from "@mui/icons-material/Block";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
 
 import {
@@ -20,10 +21,12 @@ import {
   addMedical,
   editMedical,
   toggleMedical,
+  removeMedical,
 } from "../../features/medicals/medicalThunks";
 
 import MedicalFormDialog from "../../features/medicals/MedicalFormDialog";
 import EditMedicalDialog from "../../features/medicals/EditMedicalDialog";
+import DeleteMedicalDialog from "../../features/medicals/DeleteMedicalDialog";
 
 import PageHeader from "../../components/ui/PageHeader";
 
@@ -38,7 +41,11 @@ export default function MedicalsPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [selectedMedical, setSelectedMedical] = useState<Medical | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Medical | null>(null);
 
   useEffect(() => {
     dispatch(fetchMedicals());
@@ -63,15 +70,44 @@ export default function MedicalsPage() {
     setEditOpen(false);
   };
 
+  const handleDeleteMedical = async (data: Medical) => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      // NOTE: dispatch(thunk) resolves even when the thunk fails — unwrap()
+      // is what surfaces a rejection, otherwise the dialog would close on a
+      // silently-failed delete.
+      await dispatch(removeMedical(data.id)).unwrap();
+      setDeleteOpen(false);
+      setDeleteTarget(null);
+    } catch (err) {
+      const error = err as { message?: string; code?: string };
+      const message = error?.message ?? "";
+      setDeleteError(
+        error?.code === "permission-denied" ||
+          message.includes("insufficient permissions")
+          ? "Permission denied: the updated firestore.rules are not deployed yet. Run  firebase deploy --only firestore:rules  — then click Delete again."
+          : message || "Deletion failed — please try again."
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const columns: GridColDef[] = [
     {
       field: "medicalName",
       headerName: "Store",
       flex: 1.4,
+      minWidth: 200,
       renderCell: (params) => (
-        <div className="py-1">
-          <p className="text-[13px] font-semibold text-ink">{params.row.medicalName}</p>
-          <p className="text-xs text-ink-mute">{params.row.email || "—"}</p>
+        <div className="min-w-0 py-1">
+          <p className="truncate text-[13px] font-semibold text-ink">
+            {params.row.medicalName}
+          </p>
+          <p className="truncate text-xs text-ink-mute">
+            {params.row.email || "—"}
+          </p>
         </div>
       ),
     },
@@ -79,11 +115,13 @@ export default function MedicalsPage() {
       field: "ownerName",
       headerName: "Owner",
       flex: 1,
+      minWidth: 130,
     },
     {
       field: "phone",
       headerName: "Phone",
       flex: 1,
+      minWidth: 120,
       renderCell: (params) => (
         <span className="tnum text-ink-soft">{params.row.phone || "—"}</span>
       ),
@@ -92,6 +130,7 @@ export default function MedicalsPage() {
       field: "status",
       headerName: "Status",
       flex: 0.8,
+      minWidth: 100,
       renderCell: (params) => (
         <span
           className={`${TAG} ${
@@ -108,9 +147,10 @@ export default function MedicalsPage() {
       field: "actions",
       headerName: "Actions",
       flex: 1.6,
+      minWidth: 300,
       sortable: false,
       renderCell: (params) => (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 whitespace-nowrap">
           <Button
             size="small"
             startIcon={<EditIcon sx={{ fontSize: 15 }} />}
@@ -143,6 +183,19 @@ export default function MedicalsPage() {
           >
             {params.row.isActive ? "Deactivate" : "Activate"}
           </Button>
+
+          <Button
+            size="small"
+            color="error"
+            startIcon={<DeleteIcon sx={{ fontSize: 15 }} />}
+            onClick={() => {
+              setDeleteTarget(params.row);
+              setDeleteError(null);
+              setDeleteOpen(true);
+            }}
+          >
+            Delete
+          </Button>
         </div>
       ),
     },
@@ -167,6 +220,7 @@ export default function MedicalsPage() {
           loading={loading}
           disableRowSelectionOnClick
           autoHeight
+          rowHeight={64}
           pageSizeOptions={[10, 25, 50]}
           initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
           sx={{
@@ -217,6 +271,15 @@ export default function MedicalsPage() {
         onClose={() => setEditOpen(false)}
         medical={selectedMedical}
         onSubmit={handleEditMedical}
+      />
+
+      <DeleteMedicalDialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        medical={deleteTarget}
+        onConfirm={handleDeleteMedical}
+        deleting={deleting}
+        error={deleteError}
       />
     </div>
   );
